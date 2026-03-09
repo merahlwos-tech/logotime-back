@@ -1,27 +1,28 @@
 const mongoose = require('mongoose')
 
+const sizeSchema = new mongoose.Schema({
+  size:  { type: String, required: true },
+  price: { type: Number, required: true, min: 0 },
+})
+
 const productSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    brand: { type: String, required: true, trim: true },
+    name:     { type: String, required: true, trim: true },
     category: {
       type: String,
       required: true,
-      enum: ['Bébé', 'Enfants', 'Femme', 'Homme', 'Lingerie', 'Accessoires'],
+      enum: ['Board', 'Bags', 'Autocollants', 'Paper'],
     },
-    price: { type: Number, required: true, min: 0 },
-    description: { type: String, default: '' },
-    images: [{ type: String }],
-    sizes: [
-      {
-        size: { type: String, required: true },
-        stock: { type: Number, required: true, min: 0, default: 0 },
-      },
-    ],
-    tags: [{
-      type: String,
-      enum: ['Look bébé printemps', 'Look Femme Casual', 'Idées de cadeaux']
-    }],
+    sizes:  { type: [sizeSchema], default: [] },
+    images: { type: [String],    default: [] },
+
+    // Options d'impression
+    colors:           { type: [String], default: [] },
+    doubleSided:      { type: Boolean,  default: false },
+    doubleSidedPrice: { type: Number,   default: 0, min: 0 },
+
+    // Conservé pour les collections spéciales
+    tags: { type: [String], default: [] },
   },
   { timestamps: true }
 )
