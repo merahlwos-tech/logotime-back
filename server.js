@@ -8,6 +8,11 @@ require('dotenv').config()
 
 const app = express()
 
+// Render (et la plupart des hébergeurs) passent par un proxy
+// Cette ligne dit à Express de faire confiance au header X-Forwarded-For
+// → nécessaire pour que le rate limiter identifie correctement les IPs
+app.set('trust proxy', 1)
+
 /* ══════════════════════════════════════════════
    SÉCURITÉ & PERFORMANCE — Middleware globaux
 ══════════════════════════════════════════════ */
