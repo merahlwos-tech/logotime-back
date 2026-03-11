@@ -1,0 +1,20 @@
+name: Wake Render Server
+on:
+  schedule:
+    - cron: '50 3 * * *'  # 5h50 France (été, UTC+2) — à changer en '50 4 * * *' en hiver (UTC+1)
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up Render server
+        run: |
+          for i in {1..6}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://client01-back.onrender.com/)
+            echo "Tentative $i : $STATUS"
+            if [ "$STATUS" == "200" ]; then
+              echo "Serveur réveillé ✅"
+              exit 0
+            fi
+            sleep 30
+          done
+          exit 1
