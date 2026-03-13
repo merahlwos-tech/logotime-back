@@ -45,7 +45,6 @@ async function sendToEcotrack(order) {
     type:        '1',
     stop_desk:   customerInfo.deliveryMethod === 'Stop Desk' ? '1' : '0',
     produit:     produitLabel,
-    ...(customerInfo.description ? { remarque: customerInfo.description.slice(0, 255) } : {}),
   })
 
   const resp = await fetch(`${ECOTRACK_BASE}/api/v1/create/order?${params.toString()}`, {

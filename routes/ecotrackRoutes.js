@@ -116,7 +116,6 @@ router.post('/send-order/:id', authenticateAdmin, async (req, res) => {
       type:        '1',  // Livraison
       stop_desk:   customerInfo.deliveryMethod === 'Stop Desk' ? '1' : '0',
       produit:     produitLabel,
-      ...(customerInfo.description ? { remarque: customerInfo.description.slice(0, 255) } : {}),
     })
 
     const url = `${ECOTRACK_BASE}/api/v1/create/order?${params.toString()}`
