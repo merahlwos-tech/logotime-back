@@ -107,51 +107,39 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 })
 
-// PUT /api/orders/:id — Mise à jour statut
+// PUT /api/orders/:id — Mise à jour complète (statut + items + customerInfo)
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
-    const { status } = req.body
-    const validStatuses = ['en attente', 'confirmé', 'en livraison', 'livré', 'retour', 'annulé']
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Statut invalide' })
-    }
+    const { status, items, customerInfo, total } = req.body
+    const validStatuses = ['en attente', 'confirmé', 'annulé']
 
     const order = await Order.findById(req.params.id)
     if (!order) return res.status(404).json({ message: 'Commande introuvable' })
 
-    const previousStatus = order.status
-    order.status = status
-    await order.save()
-
-    // ── Meta CAPI : DeliveredOrder ──
-    if (status === 'livré' && previousStatus !== 'livré') {
-      setImmediate(async () => {
-        try {
-          await sendMetaEvent('DeliveredOrder', {
-            eventId:   `delivered-${order._id}`,
-            sourceUrl: '',
-            userData: {
-              phone:     order.customerInfo?.phone,
-              firstName: order.customerInfo?.firstName,
-              lastName:  order.customerInfo?.lastName,
-              wilaya:    order.customerInfo?.wilaya,
-              commune:   order.customerInfo?.commune,
-            },
-            customData: {
-              order_id:     order._id.toString(),  // ← lien commande ↔ livraison Meta
-              content_ids:  order.items.map(i => String(i.product)),
-              content_type: 'product',
-              num_items:    order.items.reduce((s, i) => s + i.quantity, 0),
-              value:        order.total,
-              currency:     'DZD',
-            },
-          })
-        } catch (err) {
-          console.error('Meta CAPI DeliveredOrder error:', err.message)
-        }
-      })
+    // Mise à jour statut
+    if (status !== undefined) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: 'Statut invalide' })
+      }
+      order.status = status
     }
 
+    // Mise à jour articles
+    if (items !== undefined) {
+      order.items = items
+    }
+
+    // Mise à jour infos client
+    if (customerInfo !== undefined) {
+      Object.assign(order.customerInfo, customerInfo)
+    }
+
+    // Mise à jour total
+    if (total !== undefined) {
+      order.total = total
+    }
+
+    await order.save()
     res.json(order)
 
   } catch (err) {

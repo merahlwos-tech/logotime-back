@@ -15,9 +15,9 @@ const customerInfoSchema = new mongoose.Schema({
   phone:          { type: String, required: true },
   wilaya:         { type: String, required: true },
   commune:        { type: String, required: true },
-  description:    { type: String, required: true },
+  description:    { type: String, default: '' },
   logoUrls:       { type: [String], default: [] },
-  deliveryMethod: { type: String, default: 'Domicile' }, // 'Domicile' | 'Stop Desk'
+  deliveryMethod: { type: String, default: 'Domicile' },
   deliveryFee:    { type: Number, default: null },
 }, { _id: false })
 
@@ -27,7 +27,7 @@ const orderSchema = new mongoose.Schema({
   total:        { type: Number, required: true },
   status: {
     type:    String,
-    enum:    ['en attente', 'confirmé', 'en livraison', 'livré', 'retour', 'annulé'],
+    enum:    ['en attente', 'confirmé', 'annulé'],
     default: 'en attente',
   },
 }, { timestamps: true })
