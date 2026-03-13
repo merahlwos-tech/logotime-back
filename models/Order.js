@@ -14,6 +14,7 @@ const customerInfoSchema = new mongoose.Schema({
   lastName:       { type: String, required: true },
   phone:          { type: String, required: true },
   wilaya:         { type: String, required: true },
+  wilayaCode:     { type: Number, default: null },   // code numérique 1-58 pour Ecotrack
   commune:        { type: String, required: true },
   description:    { type: String, default: '' },
   logoUrls:       { type: [String], default: [] },
@@ -22,14 +23,16 @@ const customerInfoSchema = new mongoose.Schema({
 }, { _id: false })
 
 const orderSchema = new mongoose.Schema({
-  customerInfo: { type: customerInfoSchema, required: true },
-  items:        { type: [orderItemSchema],  required: true },
-  total:        { type: Number, required: true },
+  customerInfo:      { type: customerInfoSchema, required: true },
+  items:             { type: [orderItemSchema],  required: true },
+  total:             { type: Number, required: true },
   status: {
     type:    String,
     enum:    ['en attente', 'confirmé', 'annulé'],
     default: 'en attente',
   },
+  ecotrackTracking:  { type: String, default: null },  // numéro de tracking Ecotrack
+  ecotrackSentAt:    { type: Date,   default: null },   // date d'envoi
 }, { timestamps: true })
 
 orderSchema.index({ createdAt: -1 })
