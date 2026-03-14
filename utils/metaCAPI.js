@@ -20,7 +20,7 @@ const crypto = require('crypto')
 
 const PIXEL_ID     = process.env.META_PIXEL_ID
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN
-const CAPI_VERSION = 'v19.0'
+const CAPI_VERSION = 'v21.0'
 
 /* ─────────────────────────────────────────────
    Hashage SHA256 d'une valeur normalisée
