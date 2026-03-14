@@ -22,34 +22,25 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
             _id:      '$status',
             count:    { $sum: 1 },
             revenue:  { $sum: '$total' },
-            products: {
-              $sum: {
-                $reduce: {
-                  input:        '$items',
-                  initialValue: 0,
-                  in: { $add: ['$$value', '$$this.quantity'] },
-                },
-              },
-            },
           },
         },
       ]),
       Order.countDocuments(),
     ])
 
-    // Restructure les résultats
     const byStatus = {}
     agg.forEach(row => { byStatus[row._id] = row })
 
-    const delivered = byStatus['livré']   || { count: 0, revenue: 0, products: 0 }
-    const returned  = byStatus['retour']  || { count: 0 }
+    const confirmed  = byStatus['confirmé']   || { count: 0, revenue: 0 }
+    const pending    = byStatus['en attente'] || { count: 0 }
+    const cancelled  = byStatus['annulé']     || { count: 0 }
 
     res.json({
-      totalRevenue:         delivered.revenue,
-      productsDelivered:    delivered.products,
-      deliveredOrdersCount: delivered.count,
-      returnsCount:         returned.count,
       totalOrders,
+      totalRevenue:      confirmed.revenue,
+      confirmedOrders:   confirmed.count,
+      pendingOrders:     pending.count,
+      cancelledOrders:   cancelled.count,
     })
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -61,10 +52,8 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/stats/reset', authenticateAdmin, async (req, res) => {
   try {
-    const result = await Order.deleteMany({
-      status: { $in: ['livré', 'retour'] },
-    })
-    res.json({ message: 'Statistiques réinitialisées', deletedCount: result.deletedCount })
+    const result = await Order.deleteMany({ status: 'annulé' })
+    res.json({ message: 'Commandes annulées supprimées', deletedCount: result.deletedCount })
   } catch (error) {
     res.status(500).json({ message: error.message })
   }
