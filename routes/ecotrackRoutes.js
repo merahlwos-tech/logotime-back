@@ -2,7 +2,7 @@ const express = require('express')
 const router  = express.Router()
 const { authenticateAdmin } = require('../middleware/auth')
 
-const ECOTRACK_BASE  = process.env.ECOTRACK_BASE_URL  || 'https://ecotrack.dz'
+const ECOTRACK_BASE  = process.env.ECOTRACK_BASE_URL  || 'https://platform.dhd-dz.com'
 const ECOTRACK_TOKEN = process.env.ECOTRACK_API_TOKEN || ''
 
 const ecoHeaders = () => ({
