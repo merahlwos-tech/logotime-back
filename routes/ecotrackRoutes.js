@@ -72,13 +72,22 @@ router.get('/communes', async (req, res) => {
       }
       if (!raw) return res.status(502).json({ message: 'Impossible de charger les communes' })
 
-      // Normalise
+      // Debug : affiche la structure du 1er élément brut pour diagnostiquer
+      if (raw.length > 0) {
+        console.log('[ECOTRACK] communes raw[0] keys:', Object.keys(raw[0]))
+        console.log('[ECOTRACK] communes raw[0]:', JSON.stringify(raw[0]))
+      }
+
+      // Normalise — couvre les champs connus de DHD/Ecotrack
       allCommunes = raw.map(co => ({
         id:            co.id           ?? co.commune_id ?? co.code ?? '',
-        nom:           co.nom          ?? co.name       ?? co.commune_name ?? '',
-        wilaya_id:     String(co.wilaya_id ?? co.wilaya ?? ''),
+        nom:           co.nom          ?? co.name       ?? co.commune_name ?? co.label ?? '',
+        wilaya_id:     String(co.wilaya_id ?? co.wilaya_code ?? co.wilaya ?? co.code_wilaya ?? ''),
         has_stop_desk: Number(co.has_stop_desk ?? co.stop_desk ?? co.stopdesk ?? 0),
       })).filter(co => co.id !== '')
+
+      console.log('[ECOTRACK] communes normalisées[0]:', JSON.stringify(allCommunes[0] || {}))
+      console.log('[ECOTRACK] wilaya_id distincts (échantillon):', [...new Set(allCommunes.slice(0,50).map(c => c.wilaya_id))])
 
       cache.set('all_communes', { data: allCommunes, ts: Date.now() })
     }
