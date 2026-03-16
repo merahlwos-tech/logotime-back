@@ -83,10 +83,34 @@ router.get('/fees', async (req, res) => {
   try {
     const cached = getCached('fees')
     if (cached) return res.json(cached)
-    const resp = await fetch(`${ECOTRACK_BASE}/api/v1/get/fees`, { headers: ecoHeaders() })
-    if (!resp.ok) throw new Error(`ECOTRACK fees: ${resp.status}`)
-    const data = await resp.json()
-    const list = Array.isArray(data) ? data : (data?.livraison || [])
+
+    const tryUrls = [
+      `${ECOTRACK_BASE}/api/v1/get/fees`,
+      `${ECOTRACK_BASE}/api/v1/fees`,
+      `${ECOTRACK_BASE}/api/v1/get/delivery-fees`,
+      `${ECOTRACK_BASE}/api/v1/get/tarifs`,
+      `${ECOTRACK_BASE}/api/v1/tarifs`,
+    ]
+
+    let list = null
+    let lastError = ''
+    for (const url of tryUrls) {
+      try {
+        const resp = await fetch(url, { headers: ecoHeaders() })
+        if (resp.ok) {
+          const data = await resp.json()
+          list = Array.isArray(data) ? data : (data?.livraison || data?.fees || data?.tarifs || Object.values(data))
+          console.log(`[ECOTRACK] fees OK from: ${url}`)
+          break
+        }
+        lastError = `${resp.status} on ${url}`
+      } catch (e) {
+        lastError = e.message
+      }
+    }
+
+    if (!list) throw new Error(`Toutes les URLs fees ont échoué. Dernier: ${lastError}`)
+
     cache.set('fees', { data: list, ts: Date.now() })
     res.json(list)
   } catch (err) {
