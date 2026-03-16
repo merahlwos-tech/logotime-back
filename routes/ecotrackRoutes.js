@@ -27,7 +27,15 @@ router.get('/wilayas', async (req, res) => {
     const resp = await fetch(`${ECOTRACK_BASE}/api/v1/get/wilayas`, { headers: ecoHeaders() })
     if (!resp.ok) throw new Error(`ECOTRACK wilayas: ${resp.status}`)
     const data = await resp.json()
-    const list = Array.isArray(data) ? data : []
+    const raw = Array.isArray(data) ? data : []
+    // DHD retourne { id, name, ar_name, code }
+    // Le front attend { wilaya_id, wilaya_name }
+    const list = raw.map(w => ({
+      wilaya_id:   w.wilaya_id   ?? w.id   ?? w.code ?? '',
+      wilaya_name: w.wilaya_name ?? w.name ?? w.nom  ?? '',
+      ar_name:     w.ar_name     ?? w.ar   ?? '',
+      code:        w.code        ?? w.id   ?? '',
+    })).filter(w => w.wilaya_id !== '')
     cache.set('wilayas', { data: list, ts: Date.now() })
     res.json(list)
   } catch (err) {
@@ -59,7 +67,14 @@ router.get('/communes', async (req, res) => {
         const resp = await fetch(url, { headers: ecoHeaders() })
         if (resp.ok) {
           const json = await resp.json()
-          data = Array.isArray(json) ? json : Object.values(json)
+          const raw = Array.isArray(json) ? json : Object.values(json)
+          // Normalise : DHD { id, name, wilaya_id } → front attend { id, nom, has_stop_desk }
+          data = raw.map(co => ({
+            id:           co.id            ?? co.commune_id ?? co.code ?? '',
+            nom:          co.nom           ?? co.name       ?? co.commune_name ?? '',
+            wilaya_id:    co.wilaya_id     ?? '',
+            has_stop_desk:Number(co.has_stop_desk ?? co.stop_desk ?? co.stopdesk ?? 0),
+          }))
           break
         }
         lastError = `${resp.status} on ${url}`
@@ -111,17 +126,16 @@ router.get('/fees', async (req, res) => {
 
     if (!list) throw new Error(`Toutes les URLs fees ont échoué. Dernier: ${lastError}`)
 
-    // Normalise les champs pour que le front reçoive toujours :
-    // { wilaya_id, wilaya_name, tarif, tarif_stopdesk }
+    // Normalise selon la doc DHD : { wilaya_id, home_fee, desk_fee }
+    // Le front attend : { wilaya_id, tarif, tarif_stopdesk }
     const normalized = list.map(f => ({
-      wilaya_id:       f.wilaya_id   ?? f.id          ?? f.code         ?? f.wilaya      ?? '',
-      wilaya_name:     f.wilaya_name ?? f.name         ?? f.nom          ?? f.wilaya_nom  ?? '',
-      tarif:           Number(f.tarif           ?? f.prix          ?? f.price        ?? f.home_price   ?? f.domicile ?? f.home ?? 0),
-      tarif_stopdesk:  Number(f.tarif_stopdesk  ?? f.stop_desk     ?? f.stopdesk     ?? f.bureau_price ?? f.bureau   ?? f.stop ?? f.tarif ?? 0),
+      wilaya_id:      f.wilaya_id ?? f.id   ?? f.code ?? '',
+      wilaya_name:    f.wilaya_name ?? f.name ?? f.nom ?? '',
+      tarif:          Number(f.tarif ?? f.home_fee ?? f.domicile ?? f.home ?? f.prix ?? 0),
+      tarif_stopdesk: Number(f.tarif_stopdesk ?? f.desk_fee ?? f.stop_desk ?? f.stopdesk ?? f.bureau ?? f.stop ?? 0),
     })).filter(f => f.wilaya_id !== '')
 
-    console.log(`[ECOTRACK] fees normalisés: ${normalized.length} wilayas`)
-    if (normalized.length > 0) console.log('[ECOTRACK] fees sample:', JSON.stringify(normalized[0]))
+    console.log(`[ECOTRACK] fees OK: ${normalized.length} wilayas, sample:`, JSON.stringify(normalized[0] || {}))
 
     cache.set('fees', { data: normalized, ts: Date.now() })
     res.json(normalized)
