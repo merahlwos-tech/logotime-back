@@ -63,6 +63,7 @@ app.use('/api/upload',   generalLimit, require('./routes/uploadRoutes'))
 app.use('/api/admin',    generalLimit, require('./routes/adminRoutes'))
 app.use('/api/meta',     generalLimit, require('./routes/metaRoutes'))
 app.use('/api/ecotrack', generalLimit, require('./routes/ecotrackRoutes'))
+app.use('/api/github',   generalLimit, require('./routes/githubRoutes'))
 
 /* ══════════════════════════════════════════════
    MONGODB
