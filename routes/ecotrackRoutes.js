@@ -78,13 +78,13 @@ router.get('/communes', async (req, res) => {
         console.log('[ECOTRACK] communes raw[0]:', JSON.stringify(raw[0]))
       }
 
-      // Normalise — couvre les champs connus de DHD/Ecotrack
+      // Normalise — DHD retourne { nom, wilaya_id, code_postal, has_stop_desk } sans id
       allCommunes = raw.map(co => ({
-        id:            co.id           ?? co.commune_id ?? co.code ?? '',
-        nom:           co.nom          ?? co.name       ?? co.commune_name ?? co.label ?? '',
+        id:            co.id ?? co.commune_id ?? co.code ?? co.nom ?? '',
+        nom:           co.nom ?? co.name ?? co.commune_name ?? co.label ?? '',
         wilaya_id:     String(co.wilaya_id ?? co.wilaya_code ?? co.wilaya ?? co.code_wilaya ?? ''),
         has_stop_desk: Number(co.has_stop_desk ?? co.stop_desk ?? co.stopdesk ?? 0),
-      })).filter(co => co.id !== '')
+      })).filter(co => co.nom !== '')
 
       console.log('[ECOTRACK] communes normalisées[0]:', JSON.stringify(allCommunes[0] || {}))
       console.log('[ECOTRACK] wilaya_id distincts (échantillon):', [...new Set(allCommunes.slice(0,50).map(c => c.wilaya_id))])
