@@ -219,9 +219,10 @@ router.post('/send-order/:id', authenticateAdmin, async (req, res) => {
       })
     }
 
-    // Sauvegarde du tracking
+    // Sauvegarde du tracking + confirmation automatique
     order.ecotrackTracking = data.tracking
     order.ecotrackSentAt   = new Date()
+    order.status           = 'confirmé'
     await order.save()
 
     res.json({ success: true, tracking: data.tracking })

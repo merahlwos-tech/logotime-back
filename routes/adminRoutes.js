@@ -15,29 +15,45 @@ const { authenticateAdmin } = require('../middleware/auth')
 // ─────────────────────────────────────────────
 router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
-    const [agg, totalOrders] = await Promise.all([
+    const [agg, totalOrders, penaltyCount] = await Promise.all([
       Order.aggregate([
         {
           $group: {
-            _id:      '$status',
-            count:    { $sum: 1 },
-            revenue:  { $sum: '$total' },
+            _id:         '$status',
+            count:       { $sum: 1 },
+            // Gains = total - frais de livraison (hors livraison)
+            revenue: {
+              $sum: {
+                $subtract: [
+                  '$total',
+                  { $ifNull: ['$customerInfo.deliveryFee', 0] }
+                ]
+              }
+            },
           },
         },
       ]),
       Order.countDocuments(),
+      // Commandes annulées qui avaient été envoyées à Ecotrack → pénalité -50 DA chacune
+      Order.countDocuments({ status: 'annulé', ecotrackTracking: { $ne: null } }),
     ])
 
     const byStatus = {}
     agg.forEach(row => { byStatus[row._id] = row })
 
-    const confirmed  = byStatus['confirmé']   || { count: 0, revenue: 0 }
-    const pending    = byStatus['en attente'] || { count: 0 }
-    const cancelled  = byStatus['annulé']     || { count: 0 }
+    const confirmed = byStatus['confirmé']   || { count: 0, revenue: 0 }
+    const pending   = byStatus['en attente'] || { count: 0 }
+    const cancelled = byStatus['annulé']     || { count: 0 }
+
+    const penalty     = penaltyCount * 50
+    const netRevenue  = Math.max(0, confirmed.revenue - penalty)
 
     res.json({
       totalOrders,
-      totalRevenue:      confirmed.revenue,
+      totalRevenue:      netRevenue,
+      grossRevenue:      confirmed.revenue,
+      penalty,
+      penaltyCount,
       confirmedOrders:   confirmed.count,
       pendingOrders:     pending.count,
       cancelledOrders:   cancelled.count,

@@ -163,6 +163,10 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     if (status === 'confirmé' && !wasConfirmed && !order.ecotrackTracking) {
       try {
         ecotrackResult = await sendToEcotrack(order)
+        // Si l'envoi Ecotrack réussit, on s'assure que le statut est bien confirmé
+        if (ecotrackResult?.tracking) {
+          order.status = 'confirmé'
+        }
       } catch (err) {
         console.error('[ECOTRACK] Erreur auto-envoi:', err.message)
         ecotrackResult = { error: err.message }
