@@ -111,8 +111,20 @@ router.get('/fees', async (req, res) => {
 
     if (!list) throw new Error(`Toutes les URLs fees ont échoué. Dernier: ${lastError}`)
 
-    cache.set('fees', { data: list, ts: Date.now() })
-    res.json(list)
+    // Normalise les champs pour que le front reçoive toujours :
+    // { wilaya_id, wilaya_name, tarif, tarif_stopdesk }
+    const normalized = list.map(f => ({
+      wilaya_id:       f.wilaya_id   ?? f.id          ?? f.code         ?? f.wilaya      ?? '',
+      wilaya_name:     f.wilaya_name ?? f.name         ?? f.nom          ?? f.wilaya_nom  ?? '',
+      tarif:           Number(f.tarif           ?? f.prix          ?? f.price        ?? f.home_price   ?? f.domicile ?? f.home ?? 0),
+      tarif_stopdesk:  Number(f.tarif_stopdesk  ?? f.stop_desk     ?? f.stopdesk     ?? f.bureau_price ?? f.bureau   ?? f.stop ?? f.tarif ?? 0),
+    })).filter(f => f.wilaya_id !== '')
+
+    console.log(`[ECOTRACK] fees normalisés: ${normalized.length} wilayas`)
+    if (normalized.length > 0) console.log('[ECOTRACK] fees sample:', JSON.stringify(normalized[0]))
+
+    cache.set('fees', { data: normalized, ts: Date.now() })
+    res.json(normalized)
   } catch (err) {
     console.error('[ECOTRACK] fees error:', err.message)
     res.status(502).json({ message: 'Erreur ECOTRACK fees', error: err.message })
