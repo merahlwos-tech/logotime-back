@@ -45,48 +45,54 @@ router.get('/wilayas', async (req, res) => {
 })
 
 // ─── GET /api/ecotrack/communes?wilaya_id=16 ────────────────────────────────
+// Stratégie : récupère TOUTES les communes une seule fois, met en cache,
+// puis filtre côté serveur par wilaya_id — évite les 422 de DHD
 router.get('/communes', async (req, res) => {
   try {
     const { wilaya_id } = req.query
-    const cacheKey = `communes_${wilaya_id || 'all'}`
-    const cached = getCached(cacheKey)
-    if (cached) return res.json(cached)
 
-    // DHD peut utiliser wilaya_id ou wilaya selon la version de leur API
-    const tryUrls = wilaya_id ? [
-      `${ECOTRACK_BASE}/api/v1/get/communes?wilaya_id=${wilaya_id}`,
-      `${ECOTRACK_BASE}/api/v1/get/communes?wilaya=${wilaya_id}`,
-      `${ECOTRACK_BASE}/api/v1/communes?wilaya_id=${wilaya_id}`,
-      `${ECOTRACK_BASE}/api/v1/communes/${wilaya_id}`,
-    ] : [`${ECOTRACK_BASE}/api/v1/get/communes`]
-
-    let data = null
-    let lastError = ''
-    for (const url of tryUrls) {
-      try {
-        const resp = await fetch(url, { headers: ecoHeaders() })
-        if (resp.ok) {
-          const json = await resp.json()
-          const raw = Array.isArray(json) ? json : Object.values(json)
-          // Normalise : DHD { id, name, wilaya_id } → front attend { id, nom, has_stop_desk }
-          data = raw.map(co => ({
-            id:           co.id            ?? co.commune_id ?? co.code ?? '',
-            nom:          co.nom           ?? co.name       ?? co.commune_name ?? '',
-            wilaya_id:    co.wilaya_id     ?? '',
-            has_stop_desk:Number(co.has_stop_desk ?? co.stop_desk ?? co.stopdesk ?? 0),
-          }))
-          break
-        }
-        lastError = `${resp.status} on ${url}`
-      } catch (e) {
-        lastError = e.message
+    // 1. Charger toutes les communes (cache global)
+    let allCommunes = getCached('all_communes')
+    if (!allCommunes) {
+      const tryUrls = [
+        `${ECOTRACK_BASE}/api/v1/get/communes`,
+        `${ECOTRACK_BASE}/api/v1/communes`,
+      ]
+      let raw = null
+      for (const url of tryUrls) {
+        try {
+          const resp = await fetch(url, { headers: ecoHeaders() })
+          if (resp.ok) {
+            const json = await resp.json()
+            raw = Array.isArray(json) ? json : Object.values(json)
+            console.log(`[ECOTRACK] communes all OK from: ${url} (${raw.length})`)
+            break
+          }
+        } catch {}
       }
+      if (!raw) return res.status(502).json({ message: 'Impossible de charger les communes' })
+
+      // Normalise
+      allCommunes = raw.map(co => ({
+        id:            co.id           ?? co.commune_id ?? co.code ?? '',
+        nom:           co.nom          ?? co.name       ?? co.commune_name ?? '',
+        wilaya_id:     String(co.wilaya_id ?? co.wilaya ?? ''),
+        has_stop_desk: Number(co.has_stop_desk ?? co.stop_desk ?? co.stopdesk ?? 0),
+      })).filter(co => co.id !== '')
+
+      cache.set('all_communes', { data: allCommunes, ts: Date.now() })
     }
 
-    if (!data) throw new Error(`Toutes les URLs ont échoué. Dernier: ${lastError}`)
+    // 2. Filtrer par wilaya_id si fourni
+    const result = wilaya_id
+      ? allCommunes.filter(co => String(co.wilaya_id) === String(wilaya_id))
+      : allCommunes
 
-    cache.set(cacheKey, { data, ts: Date.now() })
-    res.json(data)
+    // Cache par wilaya
+    const cacheKey = `communes_${wilaya_id || 'all'}`
+    cache.set(cacheKey, { data: result, ts: Date.now() })
+
+    res.json(result)
   } catch (err) {
     console.error('[ECOTRACK] communes error:', err.message)
     res.status(502).json({ message: 'Erreur ECOTRACK communes', error: err.message })
