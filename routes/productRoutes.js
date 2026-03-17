@@ -9,6 +9,8 @@ router.get('/', async (req, res) => {
     const { category } = req.query
     const filter   = category ? { category } : {}
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean()
+    // Cache 5 min côté client + CDN Vercel/Cloudflare
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
     res.json(products)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -19,6 +21,8 @@ router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).lean()
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
+    // Cache 5 min — les détails produit changent rarement
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
     res.json(product)
   } catch (error) {
     res.status(500).json({ message: error.message })
