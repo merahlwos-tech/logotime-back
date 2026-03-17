@@ -26,7 +26,7 @@ app.use(helmet({
 //    → taille des réponses divisée par 5 à 10 sur les grandes listes
 app.use(compression())
 
-// 3. CORS ouvert — à restreindre plus tard avec ALLOWED_ORIGINS
+// 3. CORS ouvert
 app.use(cors())
 
 // 4. Limite la taille des requêtes JSON (protège contre les payloads géants)
@@ -69,12 +69,15 @@ app.use('/api/github',   generalLimit, require('./routes/githubRoutes'))
    MONGODB
 ══════════════════════════════════════════════ */
 mongoose.connect(process.env.MONGO_URI, {
-  maxPoolSize: 10,           // Pool de connexions (défaut 5 → 10 pour plus de concurrence)
+  maxPoolSize: 10,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
 })
   .then(() => console.log('✅ MongoDB connecté'))
   .catch(err => console.error('❌ Erreur MongoDB:', err))
+
+mongoose.connection.on('error', err => console.error('❌ MongoDB erreur de connexion:', err))
+mongoose.connection.on('disconnected', () => console.warn('⚠️  MongoDB déconnecté — tentative de reconnexion…'))
 
 /* ══════════════════════════════════════════════
    HEALTH CHECK
