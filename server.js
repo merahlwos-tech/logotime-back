@@ -30,7 +30,7 @@ app.use(compression())
 app.use(cors())
 
 // 4. Limite la taille des requêtes JSON (protège contre les payloads géants)
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '10mb' }))
 
 /* ══════════════════════════════════════════════
    RATE LIMITING
