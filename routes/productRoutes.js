@@ -129,7 +129,12 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     UPDATABLE.forEach(field => {
-      if (body[field] !== undefined) product[field] = body[field]
+      if (body[field] !== undefined) {
+        product[field] = body[field]
+        // Mongoose ne détecte pas automatiquement les modifications sur les arrays/sous-docs
+        // → markModified force la sauvegarde même si les valeurs semblent identiques
+        if (Array.isArray(body[field])) product.markModified(field)
+      }
     })
 
     if (product.category === 'Pack') product.freeDelivery = true

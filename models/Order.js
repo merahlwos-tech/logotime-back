@@ -5,10 +5,12 @@ const orderItemSchema = new mongoose.Schema({
   name:           { type: String, required: true },
   size:           { type: String },
   doubleSided:    { type: Boolean, default: false },
-  selectedColors: { type: [String], default: [] },   // couleurs choisies par le client
-  numberOfColors: { type: Number,   default: null },  // nb de couleurs dans le design
+  selectedColors: { type: [String], default: [] },
+  numberOfColors: { type: Number,   default: null },
   quantity:       { type: Number, required: true },
   price:          { type: Number, required: true },
+  logoUrls:       { type: [String], default: [] },    // logos uploadés pour ce produit
+  description:    { type: String,   default: '' },    // instructions spécifiques à ce produit
 })
 
 const customerInfoSchema = new mongoose.Schema({
