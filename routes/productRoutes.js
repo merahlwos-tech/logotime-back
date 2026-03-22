@@ -140,8 +140,14 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     // Tailles : reconstruire sans les anciens _id pour forcer la mise à jour
     if (body.sizes !== undefined) {
       $set.sizes = body.sizes.map(s => ({
-        size:  String(s.size),
-        price: Number(s.price),
+        size:       String(s.size),
+        price:      Number(s.price),
+        priceTiers: Array.isArray(s.priceTiers)
+          ? s.priceTiers
+              .filter(t => t.minQty > 0 && t.price >= 0)
+              .map(t => ({ minQty: Number(t.minQty), price: Number(t.price) }))
+              .sort((a, b) => a.minQty - b.minQty)
+          : [],
       }))
     }
 

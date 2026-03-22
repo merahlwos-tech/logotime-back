@@ -1,8 +1,14 @@
 const mongoose = require('mongoose')
 
+const priceTierSchema = new mongoose.Schema({
+  minQty: { type: Number, required: true, min: 1 },
+  price:  { type: Number, required: true, min: 0 },
+}, { _id: false })
+
 const sizeSchema = new mongoose.Schema({
-  size:  { type: String, required: true },
-  price: { type: Number, required: true, min: 0 },
+  size:       { type: String, required: true },
+  price:      { type: Number, required: true, min: 0 }, // prix de base (palier 1 ou fallback)
+  priceTiers: { type: [priceTierSchema], default: [] },  // paliers dégressifs
 })
 
 const packItemSchema = new mongoose.Schema({
