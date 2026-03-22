@@ -9,7 +9,6 @@ router.get('/', async (req, res) => {
     const { category } = req.query
     const filter   = category ? { category } : {}
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean()
-    // Cache 5 min côté client + CDN Vercel/Cloudflare
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
     res.json(products)
   } catch (error) {
@@ -21,7 +20,6 @@ router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).lean()
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
-    // Cache 5 min — les détails produit changent rarement
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
     res.json(product)
   } catch (error) {
@@ -29,17 +27,24 @@ router.get('/:id', async (req, res) => {
   }
 })
 
+// ── Helper : parse les champs JSON string envoyés par FormData ────────────
+function parseBody(body) {
+  const b = { ...body }
+  if (typeof b.sizes      === 'string') b.sizes      = JSON.parse(b.sizes)
+  if (typeof b.colors     === 'string') b.colors     = JSON.parse(b.colors)
+  if (typeof b.tags       === 'string') b.tags       = JSON.parse(b.tags)
+  if (typeof b.packItems  === 'string') b.packItems  = JSON.parse(b.packItems)
+  if (typeof b.doubleSided        === 'string') b.doubleSided        = b.doubleSided        === 'true'
+  if (typeof b.colorDesignEnabled === 'string') b.colorDesignEnabled = b.colorDesignEnabled === 'true'
+  if (b.images && !Array.isArray(b.images)) b.images = [b.images]
+  if (!b.images) b.images = []
+  // Pour les packs : freeDelivery est géré par le middleware Mongoose
+  return b
+}
+
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const body = { ...req.body }
-    if (typeof body.sizes === 'string')              body.sizes              = JSON.parse(body.sizes)
-    if (typeof body.colors === 'string')             body.colors             = JSON.parse(body.colors)
-    if (typeof body.tags === 'string')               body.tags               = JSON.parse(body.tags)
-    if (typeof body.doubleSided === 'string')        body.doubleSided        = body.doubleSided === 'true'
-    if (typeof body.colorDesignEnabled === 'string') body.colorDesignEnabled = body.colorDesignEnabled === 'true'
-    if (body.images && !Array.isArray(body.images)) body.images = [body.images]
-    if (!body.images) body.images = []
-
+    const body       = parseBody(req.body)
     const product    = new Product(body)
     const newProduct = await product.save()
     res.status(201).json(newProduct)
@@ -53,14 +58,8 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const product = await Product.findById(req.params.id)
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
 
-    const body = { ...req.body }
-    if (typeof body.sizes === 'string')              body.sizes              = JSON.parse(body.sizes)
-    if (typeof body.colors === 'string')             body.colors             = JSON.parse(body.colors)
-    if (typeof body.tags === 'string')               body.tags               = JSON.parse(body.tags)
-    if (typeof body.doubleSided === 'string')        body.doubleSided        = body.doubleSided === 'true'
-    if (typeof body.colorDesignEnabled === 'string') body.colorDesignEnabled = body.colorDesignEnabled === 'true'
-    if (body.images && !Array.isArray(body.images)) body.images = [body.images]
-    if (!body.images || body.images.length === 0)   body.images = product.images
+    const body = parseBody(req.body)
+    if (!body.images || body.images.length === 0) body.images = product.images
 
     const updated = await Product.findByIdAndUpdate(
       req.params.id, body,
