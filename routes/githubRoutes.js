@@ -126,4 +126,101 @@ router.post('/upload', authenticateAdmin, async (req, res) => {
   }
 })
 
+
+
+/* ── GET /api/github/reviews ────────────────────────────────────────────────
+   Liste les photos de retours clients stockées dans public/reviews/ du repo
+─────────────────────────────────────────────────────────────────────────── */
+router.get('/reviews', async (req, res) => {
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/public/reviews?ref=${GITHUB_BRANCH}`,
+      { headers: ghHeaders() }
+    )
+    if (!r.ok) {
+      // Dossier inexistant = aucune photo
+      if (r.status === 404) return res.json([])
+      return res.status(r.status).json({ message: 'Erreur GitHub' })
+    }
+    const files = await r.json()
+    const photos = files
+      .filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name))
+      .map(f => ({
+        name: f.name,
+        sha:  f.sha,
+        url:  `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/public/reviews/${f.name}`,
+      }))
+    res.json(photos)
+  } catch (err) {
+    console.error('[GITHUB] reviews list error:', err.message)
+    res.status(500).json({ message: 'Erreur serveur', error: err.message })
+  }
+})
+
+/* ── POST /api/github/reviews ───────────────────────────────────────────────
+   Ajoute une photo de retour client dans public/reviews/
+   Body: { filename, base64 }
+─────────────────────────────────────────────────────────────────────────── */
+router.post('/reviews', authenticateAdmin, async (req, res) => {
+  try {
+    const { filename, base64 } = req.body
+    if (!filename || !base64) return res.status(400).json({ message: 'filename et base64 requis' })
+    if (!GITHUB_TOKEN) return res.status(500).json({ message: 'GITHUB_TOKEN non configuré' })
+
+    const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, '')
+    const safeName    = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const filePath    = `public/reviews/${safeName}`
+
+    const body = {
+      message: `chore: add review photo ${safeName}`,
+      content: cleanBase64,
+      branch:  GITHUB_BRANCH,
+    }
+
+    const r = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`,
+      { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) }
+    )
+    const data = await r.json()
+    if (!r.ok) return res.status(r.status).json({ message: data.message || 'Erreur GitHub' })
+
+    res.json({
+      success: true,
+      url: `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${filePath}`,
+      sha: data.content?.sha,
+    })
+  } catch (err) {
+    console.error('[GITHUB] reviews upload error:', err.message)
+    res.status(500).json({ message: 'Erreur serveur', error: err.message })
+  }
+})
+
+/* ── DELETE /api/github/reviews/:filename ───────────────────────────────────
+   Supprime une photo de retour client
+   Body: { sha }
+─────────────────────────────────────────────────────────────────────────── */
+router.delete('/reviews/:filename', authenticateAdmin, async (req, res) => {
+  try {
+    const { sha } = req.body
+    const filePath = `public/reviews/${req.params.filename}`
+    if (!sha) return res.status(400).json({ message: 'sha requis' })
+
+    const r = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`,
+      {
+        method: 'DELETE',
+        headers: ghHeaders(),
+        body: JSON.stringify({ message: `chore: remove review photo`, sha, branch: GITHUB_BRANCH }),
+      }
+    )
+    if (!r.ok) {
+      const data = await r.json()
+      return res.status(r.status).json({ message: data.message || 'Erreur GitHub' })
+    }
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message })
+  }
+})
+
 module.exports = router
