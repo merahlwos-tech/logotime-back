@@ -4,12 +4,25 @@ const Product  = require('../models/Product')
 const { authenticateAdmin } = require('../middleware/auth')
 const { deleteProductImageFromR2 } = require('../utils/uploadR2')
 
+// ── Helper : détecter si la requête vient de l'admin ──────────────────────
+function isAdminRequest(req) {
+  // Les requêtes admin portent toujours le header Authorization
+  return !!req.headers.authorization
+}
+
 router.get('/', async (req, res) => {
   try {
     const { category } = req.query
     const filter   = category ? { category } : {}
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean()
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
+
+    // Pas de cache pour l'admin, cache 5min pour les visiteurs publics
+    if (isAdminRequest(req)) {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    } else {
+      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
+    }
+
     res.json(products)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -20,7 +33,13 @@ router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).lean()
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
+
+    if (isAdminRequest(req)) {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    } else {
+      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
+    }
+
     res.json(product)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -41,7 +60,7 @@ function parseBody(body) {
   return b
 }
 
-// ── Helper : recalculer les packs qui contiennent ce produit ─────────────
+// ── Helper : recalculer les packs liés ───────────────────────────────────
 async function updatePacksContaining(productId, updatedSizes) {
   try {
     const packs = await Product.find({
@@ -98,35 +117,25 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
 
     const body = parseBody(req.body)
-
     if (!body.images || body.images.length === 0) body.images = product.images
 
-    // Champs autorisés à mettre à jour
     const UPDATABLE = [
       'name', 'category', 'sizes', 'images', 'colors', 'tags',
       'colorDesignEnabled', 'colorDesignPricePerColor', 'colorDesignMaxColors',
       'doubleSided', 'doubleSidedPrice',
     ]
-
-    // Pour les packs : ajouter les champs spécifiques
     if (body.category === 'Pack') {
       UPDATABLE.push('packItems', 'freeDelivery')
     }
 
-    // Appliquer champ par champ sur le document Mongoose
     UPDATABLE.forEach(field => {
-      if (body[field] !== undefined) {
-        product[field] = body[field]
-      }
+      if (body[field] !== undefined) product[field] = body[field]
     })
 
-    // Les packs ont toujours la livraison gratuite
     if (product.category === 'Pack') product.freeDelivery = true
 
-    // Sauvegarder sans valider les sous-documents vides
     const updated = await product.save({ validateBeforeSave: true })
 
-    // Recalculer les packs liés si les tailles ont changé
     if (body.category !== 'Pack' && body.sizes?.length > 0) {
       await updatePacksContaining(req.params.id, body.sizes)
     }
