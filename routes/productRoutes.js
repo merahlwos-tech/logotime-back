@@ -44,17 +44,14 @@ function parseBody(body) {
 // ── Helper : recalculer les packs qui contiennent ce produit ─────────────
 async function updatePacksContaining(productId, updatedSizes) {
   try {
-    // Trouver tous les packs qui référencent ce produit
     const packs = await Product.find({
       category: 'Pack',
       'packItems.productId': productId,
     })
-
     for (const pack of packs) {
       let changed = false
       const newPackItems = pack.packItems.map(item => {
         if (String(item.productId) !== String(productId)) return item
-        // Trouver le nouveau prix pour la taille correspondante
         const sizeObj = updatedSizes?.find(s => s.size === item.size)
         if (sizeObj && sizeObj.price !== item.unitPrice) {
           changed = true
@@ -62,9 +59,7 @@ async function updatePacksContaining(productId, updatedSizes) {
         }
         return item
       })
-
       if (changed) {
-        // Recalculer le prix total du pack
         const newTotal = newPackItems.reduce(
           (sum, item) => sum + item.unitPrice * item.quantity, 0
         )
@@ -78,24 +73,21 @@ async function updatePacksContaining(productId, updatedSizes) {
     }
   } catch (err) {
     console.error('Erreur mise à jour packs:', err.message)
-    // Non bloquant : ne pas faire échouer la requête principale
   }
 }
 
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
     const body = parseBody(req.body)
-
-    // Pour les produits non-Pack : s'assurer que packItems est absent/vide
     if (body.category !== 'Pack') {
       delete body.packItems
       delete body.freeDelivery
     }
-
     const product    = new Product(body)
     const newProduct = await product.save()
     res.status(201).json(newProduct)
   } catch (error) {
+    console.error('POST /products error:', error.message)
     res.status(400).json({ message: error.message })
   }
 })
@@ -109,26 +101,39 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
 
     if (!body.images || body.images.length === 0) body.images = product.images
 
-    // Pour les produits non-Pack : ne pas toucher aux champs pack
-    if (body.category !== 'Pack') {
-      delete body.packItems
-      delete body.freeDelivery
+    // Champs autorisés à mettre à jour
+    const UPDATABLE = [
+      'name', 'category', 'sizes', 'images', 'colors', 'tags',
+      'colorDesignEnabled', 'colorDesignPricePerColor', 'colorDesignMaxColors',
+      'doubleSided', 'doubleSidedPrice',
+    ]
+
+    // Pour les packs : ajouter les champs spécifiques
+    if (body.category === 'Pack') {
+      UPDATABLE.push('packItems', 'freeDelivery')
     }
 
-    // Utiliser $set explicitement pour éviter tout remplacement accidentel
-    const updated = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $set: body },
-      { new: true, runValidators: false }   // runValidators: false pour les updates partiels
-    )
+    // Appliquer champ par champ sur le document Mongoose
+    UPDATABLE.forEach(field => {
+      if (body[field] !== undefined) {
+        product[field] = body[field]
+      }
+    })
 
-    // Si les tailles ont changé sur un produit normal → recalculer les packs liés
+    // Les packs ont toujours la livraison gratuite
+    if (product.category === 'Pack') product.freeDelivery = true
+
+    // Sauvegarder sans valider les sous-documents vides
+    const updated = await product.save({ validateBeforeSave: true })
+
+    // Recalculer les packs liés si les tailles ont changé
     if (body.category !== 'Pack' && body.sizes?.length > 0) {
       await updatePacksContaining(req.params.id, body.sizes)
     }
 
     res.json(updated)
   } catch (error) {
+    console.error('PUT /products/:id error:', error.message)
     res.status(400).json({ message: error.message })
   }
 })
@@ -137,7 +142,6 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
     if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
-
     if (product.images?.length > 0) {
       await Promise.all(product.images.map(deleteProductImageFromR2))
     }
