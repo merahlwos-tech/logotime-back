@@ -113,36 +113,52 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-    if (!product) return res.status(404).json({ message: 'Produit non trouvé' })
+    const existing = await Product.findById(req.params.id)
+    if (!existing) return res.status(404).json({ message: 'Produit non trouvé' })
 
     const body = parseBody(req.body)
-    if (!body.images || body.images.length === 0) body.images = product.images
+    if (!body.images || body.images.length === 0) body.images = existing.images
 
-    const UPDATABLE = [
-      'name', 'category', 'sizes', 'images', 'colors', 'tags',
-      'colorDesignEnabled', 'colorDesignPricePerColor', 'colorDesignMaxColors',
-      'doubleSided', 'doubleSidedPrice',
-    ]
-    if (body.category === 'Pack') {
-      UPDATABLE.push('packItems', 'freeDelivery')
+    // Construire l'objet $set explicitement
+    // On n'utilise PAS product.save() pour les arrays de sous-documents
+    // car Mongoose peut ne pas détecter les changements de valeurs numériques
+    const $set = {
+      name:    body.name    ?? existing.name,
+      category: body.category ?? existing.category,
+      images:  body.images,
+      colors:  body.colors  ?? existing.colors,
+      tags:    body.tags    ?? existing.tags,
+      colorDesignEnabled:       body.colorDesignEnabled       ?? existing.colorDesignEnabled,
+      colorDesignPricePerColor: body.colorDesignPricePerColor ?? existing.colorDesignPricePerColor,
+      colorDesignMaxColors:     body.colorDesignMaxColors     !== undefined
+                                  ? body.colorDesignMaxColors
+                                  : existing.colorDesignMaxColors,
+      doubleSided:      body.doubleSided      ?? existing.doubleSided,
+      doubleSidedPrice: body.doubleSidedPrice ?? existing.doubleSidedPrice,
     }
 
-    UPDATABLE.forEach(field => {
-      if (body[field] !== undefined) {
-        product[field] = body[field]
-        // Mongoose ne détecte pas automatiquement les modifications sur les arrays/sous-docs
-        // → markModified force la sauvegarde même si les valeurs semblent identiques
-        if (Array.isArray(body[field])) product.markModified(field)
-      }
-    })
+    // Tailles : reconstruire sans les anciens _id pour forcer la mise à jour
+    if (body.sizes !== undefined) {
+      $set.sizes = body.sizes.map(s => ({
+        size:  String(s.size),
+        price: Number(s.price),
+      }))
+    }
 
-    if (product.category === 'Pack') product.freeDelivery = true
+    // Pack
+    if (body.category === 'Pack' || existing.category === 'Pack') {
+      $set.freeDelivery = true
+      if (body.packItems !== undefined) $set.packItems = body.packItems
+    }
 
-    const updated = await product.save({ validateBeforeSave: true })
+    const updated = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $set },
+      { new: true, runValidators: false }
+    )
 
-    if (body.category !== 'Pack' && body.sizes?.length > 0) {
-      await updatePacksContaining(req.params.id, body.sizes)
+    if (updated.category !== 'Pack' && $set.sizes) {
+      await updatePacksContaining(req.params.id, $set.sizes)
     }
 
     res.json(updated)
