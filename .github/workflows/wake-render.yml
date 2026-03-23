@@ -9,7 +9,7 @@ jobs:
       - name: Wake up Render server
         run: |
           for i in {1..6}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://logotime.onrender.com/)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 230 https://logotime.onrender.com/)
             echo "Tentative $i : $STATUS"
             if [ "$STATUS" == "200" ]; then
               echo "Serveur réveillé ✅"
